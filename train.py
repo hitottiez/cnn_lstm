@@ -1,5 +1,5 @@
 """
-python train.py ../../TSN/data/ucf101_rgb_train_split_1.txt ../../TSN/data/ucf101_rgb_val_split_1.txt
+python train.py data/ucf101_rgb_train_split_1.txt data/ucf101_rgb_val_split_1.txt
 """
 from keras.models import Sequential
 from keras.layers.wrappers import TimeDistributed
@@ -22,7 +22,7 @@ batch_size = 1
 num_classes = 101
 epochs = 10
 frames = 16
-train_num = 500 #the total number of training sequences for training
+train_num = 5 #the total number of training sequences for training
 
 train_split_file = sys.argv[1]
 val_split_file = sys.argv[2]
@@ -73,9 +73,9 @@ print(X_val.shape[0], 'val samples')
 # Model Construction
 model=Sequential()
 
-model.add(TimeDistributed(Conv2D(32, 3, 3, border_mode='same'), input_shape=X_train.shape[1:]))
+model.add(TimeDistributed(Conv2D(32, (3, 3), border_mode='same'), input_shape=X_train.shape[1:]))
 model.add(TimeDistributed(Activation('relu')))
-model.add(TimeDistributed(Conv2D(32, 3, 3)))
+model.add(TimeDistributed(Conv2D(32, (3, 3))))
 model.add(TimeDistributed(Activation('relu')))
 model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
 model.add(TimeDistributed(Dropout(0.25)))
@@ -93,6 +93,8 @@ model.add(GlobalAveragePooling1D(name="global_avg"))
 model.compile(loss='binary_crossentropy',
               optimizer='adam',
               metrics=['accuracy'])
+plot_model(model, to_file='model.png')
+exit()
 
 # Train
 history = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs,
