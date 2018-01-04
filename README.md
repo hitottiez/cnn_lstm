@@ -6,7 +6,7 @@ I implemented this code for practice because I have not written any deep learnin
 ## Environment
 - Linux (I used Ubuntu 14.04)
 - GPU (I used GTX TitanX x2)
-- Keras (I recommend to install Keras via docker)
+- Keras + TensorFlow (I recommend to install Keras via docker)
 
 ## Dataset
 UCF-101 dataset  
@@ -22,7 +22,7 @@ https://github.com/yjxiong/temporal-segment-networks
 ## Train model
 You can train the network.
 ```Shell
-python train.py data/ucf101_rgb_train_split_1.txt data/ucf101_rgb_val_split_1.txt
+bash train.sh
 ```
 
 # TODO
@@ -30,5 +30,6 @@ python train.py data/ucf101_rgb_train_split_1.txt data/ucf101_rgb_val_split_1.tx
 
 # Reference
 ## CNN + LSTM
+- https://github.com/keras-team/keras/issues/401
 - https://github.com/keras-team/keras/issues/5527
 - https://arxiv.org/pdf/1411.4389
