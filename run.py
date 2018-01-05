@@ -18,50 +18,16 @@ import matplotlib.pyplot as plt
 import random
 import os
 
-batch_size = 1
+batch_size = 8
 num_classes = 101
-epochs = 10
-train_num = 10 # The total number of training sequences for training
+epochs = 1
 frames = 5 # The number of frames for each sequence
-
-
-def load_data(split_file):
-    X = []
-    Y = []
-
-    split_data = np.genfromtxt(split_file, dtype=None, delimiter=" ")
-    total_train_num = len(split_data)
-
-    # Use training data partially
-    indices = random.sample(range(total_train_num), train_num)
-
-    for i in indices: #for each sequence
-        image_dir = split_data[i][0].decode("UTF-8")
-        seq_len = int(split_data[i][1])
-        y = int(split_data[i][2])
-
-        seq = []
-        for j in range(frames): #for each frame
-            # get frames at regular interval. start from frame index 1
-            frame = int(seq_len / frames * j) + 1
-            image = load_img("%s/img_%05d.jpg" % (image_dir, frame))
-            image = img_to_array(image)
-            seq.append(image)
-        X.append(np.array(seq))
-        Y.append(y)
-
-    X = np.array(X)
-    X = X.astype('float32')
-    X /= 255
-    Y = np_utils.to_categorical(Y, num_classes)
-
-    return X, Y
 
 
 def build_model():
     model=Sequential()
 
-    model.add(TimeDistributed(Conv2D(32, (3, 3), border_mode='same'), input_shape=X_train.shape[1:]))
+    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(5, 224, 224, 3)))
     model.add(TimeDistributed(Activation('relu')))
     model.add(TimeDistributed(Conv2D(32, (3, 3))))
     model.add(TimeDistributed(Activation('relu')))
@@ -84,6 +50,46 @@ def build_model():
     plot_model(model, to_file='model/cnn_lstm.png')
 
     return model
+
+
+def batch_iter(split_file):
+    split_data = np.genfromtxt(split_file, dtype=None, delimiter=" ")
+    total_seq_num = len(split_data)
+    num_batches_per_epoch = int((total_seq_num - 1) / batch_size) + 1
+
+    def data_generator():
+        while 1:
+            indices = np.random.permutation(np.arange(total_seq_num))
+
+            for batch_num in range(num_batches_per_epoch): # for each batch
+                start_index = batch_num * batch_size
+                end_index = min((batch_num + 1) * batch_size, total_seq_num)
+
+                X = []
+                Y = []
+                for i in range(start_index, end_index): # for each sequence
+                    image_dir = split_data[indices[i]][0].decode("UTF-8")
+                    seq_len = int(split_data[indices[i]][1])
+                    y = int(split_data[indices[i]][2])
+
+                    seq = []
+                    for j in range(frames): # for each frame
+                        # get frames at regular interval. start from frame index 1
+                        frame = int(seq_len / frames * j) + 1
+                        image = load_img("%s/img_%05d.jpg" % (image_dir, frame))
+                        image = img_to_array(image)
+                        seq.append(image)
+                    X.append(np.array(seq))
+                    Y.append(y)
+
+                X = np.array(X)
+                X = X.astype('float32')
+                X /= 255
+                Y = np_utils.to_categorical(Y, num_classes)
+
+                yield (X, Y)
+
+    return num_batches_per_epoch, data_generator()
 
 
 def plot_history(history):
@@ -115,25 +121,19 @@ if __name__ == "__main__":
     if not os.path.exists("model"):
         os.makedirs("model")
 
-    # Load data
-    X_train, Y_train = load_data(train_split_file)
-    X_test, Y_test = load_data(test_split_file)
-    maxlen = max([len(x) for x in X_train])
-
-    print("Loaded data")
-    print('X_train shape:', X_train.shape)
-    print('X_test shape:', X_test.shape)
-    print(X_train.shape[0], 'train samples')
-    print(X_test.shape[0], 'test samples')
-
     # Build model
     model = build_model()
-    model.summary() 
+    model.summary()
     print("Built model")
 
+    # Make batches
+    train_steps, train_batches = batch_iter(train_split_file)
+    valid_steps, valid_batches = batch_iter(test_split_file)
+
     # Train model
-    history = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs,
-              verbose=1, validation_data=(X_test, Y_test))
+    history = model.fit_generator(train_batches, steps_per_epoch=train_steps,
+                epochs=epochs, verbose=1, validation_data=valid_batches,
+                validation_steps=valid_steps)
     plot_history(history)
     print("Trained model")
 
@@ -144,10 +144,10 @@ if __name__ == "__main__":
     print("Saved model")
 
     # Evaluate model
-    score = model.evaluate(X_test, Y_test, verbose=0)
+    score = model.evaluate_generator(valid_batches, valid_steps)
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
 
-    # Post processing
-    import gc
-    gc.collect()
+    # Clear session
+    from keras.backend import tensorflow_backend as backend
+    backend.clear_session()

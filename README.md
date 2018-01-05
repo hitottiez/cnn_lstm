@@ -9,27 +9,31 @@ I implemented this code for practice because I have not written any deep learnin
 - Keras + TensorFlow (I recommend to install Keras via docker)
 
 ## Dataset
-UCF-101 dataset  
-http://crcv.ucf.edu/data/UCF101.php
+Download [UCF-101 dataset](http://crcv.ucf.edu/data/UCF101.php), and set to arbitraryãdirectory.
 
 # Run
+## Convert video to RGB images or optical flows
+Use scripts/extract_optical_flow.sh in [TSN (ECCV2016)](https://github.com/yjxiong/temporal-segment-networks).
+
 ## Make train/val split file
-https://github.com/yjxiong/temporal-segment-networks
+Use scripts/build_file_list.sh in [TSN (ECCV2016)](https://github.com/yjxiong/temporal-segment-networks).
 
-## Convert video to RGB images or optical flow
-https://github.com/yjxiong/temporal-segment-networks
-
-## Train model
-You can train the network.
+## Train model and test it
+You can train a model and test it.
 ```Shell
-bash train.sh
+bash run.sh
 ```
 
 # TODO
-- fix the GPU memory allocation error
+- Modify to accept the various length input sequences
+(Fixed number of frames are extracted from a sequence now)
+
 
 # Reference
 ## CNN + LSTM
-- https://github.com/keras-team/keras/issues/401
-- https://github.com/keras-team/keras/issues/5527
-- https://arxiv.org/pdf/1411.4389
+- [Keras issue 401](https://github.com/keras-team/keras/issues/401)
+- [Keras issue 5527](https://github.com/keras-team/keras/issues/5527)
+- [LRCN (CVPR2015)](https://arxiv.org/pdf/1411.4389)
+
+## Batch training using "fit_generator" method
+- [Hatena blog](http://hironsan.hatenablog.com/entry/2017/09/09/130608)
