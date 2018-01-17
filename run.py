@@ -8,6 +8,7 @@ from keras.layers.core import Dense, Dropout, Flatten, Activation
 from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.layers.recurrent import LSTM
 from keras.layers.pooling import GlobalAveragePooling1D
+from keras.layers import Merge
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping
 from keras.utils import plot_model, np_utils
@@ -17,6 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import os
+import argparse
 
 batch_size = 8
 num_classes = 101
@@ -24,7 +26,7 @@ epochs = 1
 frames = 5 # The number of frames for each sequence
 
 
-def build_model():
+def build_rgb_model():
     model=Sequential()
 
     model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(5, 224, 224, 3)))
@@ -37,12 +39,45 @@ def build_model():
     model.add(TimeDistributed(Flatten()))
     model.add(TimeDistributed(Dense(512)))
 
-    model.add(TimeDistributed(Dense(35, name="first_dense" )))
+    model.add(TimeDistributed(Dense(35, name="first_dense_rgb" )))
 
-    model.add(LSTM(20, return_sequences=True, name="lstm_layer"));
+    model.add(LSTM(20, return_sequences=True, name="lstm_layer_rgb"));
 
-    model.add(TimeDistributed(Dense(num_classes), name="time_distr_dense_one"))
-    model.add(GlobalAveragePooling1D(name="global_avg"))
+    model.add(TimeDistributed(Dense(num_classes), name="time_distr_dense_one_rgb"))
+    model.add(GlobalAveragePooling1D(name="global_avg_rgb"))
+
+    return model
+
+
+def build_flow_model():
+    model=Sequential()
+
+    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(5, 224, 224, 3)))
+    model.add(TimeDistributed(Activation('relu')))
+    model.add(TimeDistributed(Conv2D(32, (3, 3))))
+    model.add(TimeDistributed(Activation('relu')))
+    model.add(TimeDistributed(MaxPooling2D(pool_size=(2, 2))))
+    model.add(TimeDistributed(Dropout(0.25)))
+
+    model.add(TimeDistributed(Flatten()))
+    model.add(TimeDistributed(Dense(512)))
+
+    model.add(TimeDistributed(Dense(35, name="first_dense_flow" )))
+
+    model.add(LSTM(20, return_sequences=True, name="lstm_layer_flow"));
+
+    model.add(TimeDistributed(Dense(num_classes), name="time_distr_dense_one_flow"))
+    model.add(GlobalAveragePooling1D(name="global_avg_flow"))
+
+    return model
+
+
+def build_model():
+    rgb_model = build_rgb_model()
+    flow_model = build_flow_model()
+
+    model = Sequential()
+    model.add(Merge([rgb_model, flow_model], mode='ave'))
 
     model.compile(loss='categorical_crossentropy',
                   optimizer='rmsprop',
@@ -113,9 +148,26 @@ def plot_history(history):
 
 
 if __name__ == "__main__":
-    # Load arguments
-    train_split_file = sys.argv[1]
-    test_split_file = sys.argv[2]
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="action recognition by cnn and lstm.")
+    parser.add_argument("--split_dir", type=str, default='split')
+    parser.add_argument("--dataset", type=str, default='ucf101')
+    parser.add_argument("--rgb", type=int, default=1)
+    parser.add_argument("--flow", type=int, default=1)
+    parser.add_argument("--split", type=int, default=1)
+    args = parser.parse_args()
+
+    split_dir = args.split_dir
+    dataset = args.dataset
+    rgb = args.rgb
+    flow = args.flow
+    split = args.split
+
+    # Make split file path
+    rgb_train_split_file = "%s/%s_rgb_train_split_%s" % (split_dir, dataset, split)
+    rgb_test_split_file = "%s/%s_rgb_val_split_%s" % (split_dir, dataset, split)
+    flow_train_split_file = "%s/%s_flow_train_split_%s" % (split_dir, dataset, split)
+    flow_test_split_file = "%s/%s_flow_val_split_%s" % (split_dir, dataset, split)
 
     # Make directory
     if not os.path.exists("model"):
@@ -125,6 +177,7 @@ if __name__ == "__main__":
     model = build_model()
     model.summary()
     print("Built model")
+    exit()
 
     # Make batches
     train_steps, train_batches = batch_iter(train_split_file)

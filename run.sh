@@ -1,5 +1,5 @@
 #!/bin/bash
 
-python run.py data/ucf101_rgb_train_split_1.txt data/ucf101_rgb_val_split_1.txt
+python run.py --split_dir data --dataset ucf101 --rgb 1 --flow 1 --split 1
 
 
