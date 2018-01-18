@@ -9,6 +9,7 @@ from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.layers.recurrent import LSTM
 from keras.layers.pooling import GlobalAveragePooling1D
 from keras.layers import Merge
+#from keras.layers.merge import Average
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping
 from keras.utils import plot_model, np_utils
@@ -29,7 +30,7 @@ frames = 5 # The number of frames for each sequence
 def build_rgb_model():
     model=Sequential()
 
-    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(5, 224, 224, 3)))
+    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(frames, 224, 224, 3)))
     model.add(TimeDistributed(Activation('relu')))
     model.add(TimeDistributed(Conv2D(32, (3, 3))))
     model.add(TimeDistributed(Activation('relu')))
@@ -52,7 +53,7 @@ def build_rgb_model():
 def build_flow_model():
     model=Sequential()
 
-    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(5, 224, 224, 3)))
+    model.add(TimeDistributed(Conv2D(32, (3, 3), padding='same'), input_shape=(frames, 224, 224, 6)))
     model.add(TimeDistributed(Activation('relu')))
     model.add(TimeDistributed(Conv2D(32, (3, 3))))
     model.add(TimeDistributed(Activation('relu')))
@@ -78,6 +79,7 @@ def build_model():
 
     model = Sequential()
     model.add(Merge([rgb_model, flow_model], mode='ave'))
+#    model.add(Average([rgb_model, flow_model]))
 
     model.compile(loss='categorical_crossentropy',
                   optimizer='rmsprop',
@@ -100,29 +102,45 @@ def batch_iter(split_file):
                 start_index = batch_num * batch_size
                 end_index = min((batch_num + 1) * batch_size, total_seq_num)
 
-                X = []
+                RGB = []
+                FLOW = []
                 Y = []
                 for i in range(start_index, end_index): # for each sequence
                     image_dir = split_data[indices[i]][0].decode("UTF-8")
                     seq_len = int(split_data[indices[i]][1])
                     y = int(split_data[indices[i]][2])
 
-                    seq = []
+                    seq_rgb = []
+                    seq_flow = []
                     for j in range(frames): # for each frame
-                        # get frames at regular interval. start from frame index 1
+                        # Get frames at regular interval. start from frame index 1
                         frame = int(seq_len / frames * j) + 1
-                        image = load_img("%s/img_%05d.jpg" % (image_dir, frame))
-                        image = img_to_array(image)
-                        seq.append(image)
-                    X.append(np.array(seq))
+
+                        # Load rgb an image
+                        rgb = load_img("%s/img_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
+                        rgb = img_to_array(rgb)
+
+                        # Load flow images
+                        flow_x = load_img("%s/flow_x_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
+                        flow_x = img_to_array(flow_x)
+                        flow_y = load_img("%s/flow_y_%05d.jpg" % (image_dir, frame), target_size=(224,224))
+                        flow_y = img_to_array(flow_y)
+                        flow = np.concatenate([flow_x, flow_y], axis=2)
+
+                        seq_rgb.append(rgb)
+                        seq_flow.append(flow)
+
+                    RGB.append(np.array(seq_rgb))
+                    FLOW.append(np.array(seq_flow))
                     Y.append(y)
 
-                X = np.array(X)
-                X = X.astype('float32')
-                X /= 255
+                RGB = np.array(RGB)
+                RGB = RGB.astype('float32') / 255
+                FLOW = np.array(FLOW)
+                FLOW = FLOW.astype('float32') / 255
                 Y = np_utils.to_categorical(Y, num_classes)
 
-                yield (X, Y)
+                yield ([RGB, FLOW], Y)
 
     return num_batches_per_epoch, data_generator()
 
@@ -164,10 +182,8 @@ if __name__ == "__main__":
     split = args.split
 
     # Make split file path
-    rgb_train_split_file = "%s/%s_rgb_train_split_%s" % (split_dir, dataset, split)
-    rgb_test_split_file = "%s/%s_rgb_val_split_%s" % (split_dir, dataset, split)
-    flow_train_split_file = "%s/%s_flow_train_split_%s" % (split_dir, dataset, split)
-    flow_test_split_file = "%s/%s_flow_val_split_%s" % (split_dir, dataset, split)
+    train_split_file = "%s/%s_train_split_%s.txt" % (split_dir, dataset, split)
+    test_split_file = "%s/%s_val_split_%s.txt" % (split_dir, dataset, split)
 
     # Make directory
     if not os.path.exists("model"):
@@ -177,7 +193,6 @@ if __name__ == "__main__":
     model = build_model()
     model.summary()
     print("Built model")
-    exit()
 
     # Make batches
     train_steps, train_batches = batch_iter(train_split_file)
