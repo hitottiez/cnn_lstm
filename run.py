@@ -4,6 +4,7 @@ from keras.models import Sequential
 from keras.layers.wrappers import TimeDistributed
 from keras.preprocessing import sequence
 from keras.preprocessing.image import load_img, img_to_array
+from keras.preprocessing.image import ImageDataGenerator
 from keras.layers.core import Dense, Dropout, Flatten, Activation
 from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.layers.recurrent import LSTM
@@ -20,10 +21,12 @@ import matplotlib.pyplot as plt
 import random
 import os
 import argparse
+from PIL import Image
+
 
 batch_size = 8
 num_classes = 101
-epochs = 1
+epochs = 10
 frames = 5 # The number of frames for each sequence
 
 
@@ -110,29 +113,42 @@ def batch_iter(split_file):
                     seq_len = int(split_data[indices[i]][1])
                     y = int(split_data[indices[i]][2])
 
-                    seq_rgb = []
-                    seq_flow = []
+                    # To reduce the computational time, data augmentation is performed for each frame
+                    augs_rgb = []
+                    augs_flow = []
                     for j in range(frames): # for each frame
                         # Get frames at regular interval. start from frame index 1
                         frame = int(seq_len / frames * j) + 1
 
-                        # Load rgb an image
-                        rgb = load_img("%s/img_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
-                        rgb = img_to_array(rgb)
+                        # rgb image
+                        rgb_i = load_img("%s/img_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
+                        rgb = img_to_array(rgb_i)
+                        rgb_flip_i = rgb_i.transpose(Image.FLIP_LEFT_RIGHT) # augmentation
+                        rgb_flip = img_to_array(rgb_flip_i)
 
-                        # Load flow images
-                        flow_x = load_img("%s/flow_x_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
-                        flow_x = img_to_array(flow_x)
-                        flow_y = load_img("%s/flow_y_%05d.jpg" % (image_dir, frame), target_size=(224,224))
-                        flow_y = img_to_array(flow_y)
+                        augs_rgb.append([rgb, rgb_flip])
+
+                        # flow image
+                        flow_x_i = load_img("%s/flow_x_%05d.jpg" % (image_dir, frame), target_size=(224, 224))
+                        flow_y_i = load_img("%s/flow_y_%05d.jpg" % (image_dir, frame), target_size=(224,224))
+                        flow_x = img_to_array(flow_x_i)
+                        flow_y = img_to_array(flow_y_i)
+
+                        flow_x_flip_i = flow_x_i.transpose(Image.FLIP_LEFT_RIGHT) # augmentation
+                        flow_y_flip_i = flow_y_i.transpose(Image.FLIP_LEFT_RIGHT) # augmentation
+                        flow_x_flip = img_to_array(flow_x_flip_i)
+                        flow_y_flip = img_to_array(flow_y_flip_i)
+
                         flow = np.concatenate([flow_x, flow_y], axis=2)
+                        flow_flip = np.concatenate([flow_x_flip, flow_y_flip], axis=2)
 
-                        seq_rgb.append(rgb)
-                        seq_flow.append(flow)
+                        augs_flow.append([flow, flow_flip])
 
-                    RGB.append(np.array(seq_rgb))
-                    FLOW.append(np.array(seq_flow))
-                    Y.append(y)
+                    augs_rgb = np.array(augs_rgb).transpose((1, 0, 2, 3, 4))
+                    augs_flow = np.array(augs_flow).transpose((1, 0, 2, 3, 4))
+                    RGB.extend(augs_rgb)
+                    FLOW.extend(augs_flow)
+                    Y.extend([y, y])
 
                 RGB = np.array(RGB)
                 RGB = RGB.astype('float32') / 255
@@ -199,9 +215,9 @@ if __name__ == "__main__":
     valid_steps, valid_batches = batch_iter(test_split_file)
 
     # Train model
-    history = model.fit_generator(train_batches, steps_per_epoch=train_steps,
+    history = model.fit_generator(train_batches, steps_per_epoch=train_steps*2,
                 epochs=epochs, verbose=1, validation_data=valid_batches,
-                validation_steps=valid_steps)
+                validation_steps=valid_steps*2)
     plot_history(history)
     print("Trained model")
 
