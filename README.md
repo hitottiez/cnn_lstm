@@ -28,7 +28,6 @@ bash run.sh
 # TODO
 - Modify to accept the various length input sequences
 (Fixed number of frames are extracted from a sequence now)
-- Make a data augumentation code
 
 # Reference
 ## CNN + LSTM
